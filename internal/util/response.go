@@ -43,14 +43,28 @@ func Page(c *gin.Context, data any, page, size int, total int64) {
 	if page <= 0 {
 		page = 1
 	}
-	pages := int(total / int64(size))
+	if size <= 0 {
+		size = 20
+	}
+	pages := totalPages(total, size)
 	c.JSON(http.StatusOK, envelope{Success: true, Data: data, Meta: pageMeta{Page: page, PageSize: size, Total: total, TotalPages: pages}, RequestID: middleware.GetRequestID(c)})
+}
+
+func totalPages(total int64, size int) int {
+	if size <= 0 || total <= 0 {
+		return 0
+	}
+	pages := int(total / int64(size))
+	if total%int64(size) != 0 {
+		pages++
+	}
+	return pages
 }
 
 func Error(c *gin.Context, err error) {
 	app := service.NormalizeError(err)
-	c.Error(err)
-	c.JSON(http.StatusInternalServerError, envelope{Success: false, Error: &errorBody{Code: app.Code, Message: app.Message, Details: app.Details}, RequestID: middleware.GetRequestID(c)})
+	_ = c.Error(err)
+	c.JSON(app.Status, envelope{Success: false, Error: &errorBody{Code: app.Code, Message: app.Message, Details: app.Details}, RequestID: middleware.GetRequestID(c)})
 }
 
 func BindJSON(c *gin.Context, target any, validate *validator.Validate) bool {

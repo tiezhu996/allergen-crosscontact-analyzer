@@ -102,7 +102,7 @@ func Recovery(logger *slog.Logger) gin.HandlerFunc {
 		defer func() {
 			if recovered := recover(); recovered != nil {
 				logger.Error("panic_recovered", "request_id", GetRequestID(c), "panic", recovered, "stack", string(debug.Stack()))
-				if c.Writer.Written() {
+				if !c.Writer.Written() {
 					abort(c, http.StatusInternalServerError, "internal_error", "服务处理失败")
 				} else {
 					c.Abort()
@@ -125,7 +125,7 @@ type limiter struct {
 }
 
 func RateLimit(limitPerMinute int) gin.HandlerFunc {
-	state := &limiter{limit: limitPerMinute, lastCleanup: time.Now()}
+	state := &limiter{limit: limitPerMinute, buckets: make(map[string]rateBucket), lastCleanup: time.Now()}
 	return func(c *gin.Context) {
 		now := time.Now()
 		key := c.ClientIP()
@@ -148,7 +148,7 @@ func CORS(origins []string) gin.HandlerFunc {
 	}
 	return func(c *gin.Context) {
 		origin := c.GetHeader("Origin")
-		if origin != "" {
+		if origin != "" && allowed[origin] {
 			c.Header("Access-Control-Allow-Origin", origin)
 			c.Header("Vary", "Origin")
 			c.Header("Access-Control-Allow-Credentials", "true")
@@ -180,6 +180,7 @@ func GetRequestID(c *gin.Context) string {
 
 func (l *limiter) allow(key string, now time.Time) (bool, int) {
 	l.mu.Lock()
+	defer l.mu.Unlock()
 	bucket := l.buckets[key]
 	if bucket.window.IsZero() || now.Sub(bucket.window) >= time.Minute {
 		bucket = rateBucket{window: now, count: 0}
