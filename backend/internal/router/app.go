@@ -30,7 +30,7 @@ func New(cfg config.Config, logger *slog.Logger, database *repository.Database, 
 		c.JSON(http.StatusOK, gin.H{"status": "ok", "service": "food-allergen-crosscontact-analyzer", "time": time.Now().UTC()})
 	})
 	engine.GET("/readyz", func(c *gin.Context) {
-		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		ctx, cancel := context.WithTimeout(c.Request.Context(), 2*time.Second)
 		defer cancel()
 		if err := database.Ping(ctx); err != nil {
 			c.JSON(http.StatusServiceUnavailable, gin.H{"status": "not_ready", "database": "unavailable"})

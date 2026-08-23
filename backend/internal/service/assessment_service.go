@@ -184,7 +184,7 @@ func (s *AssessmentService) computeRoute(ctx context.Context, route model.Proces
 	if err != nil {
 		return analyzer.Result{}, nil, NewError(http.StatusUnprocessableEntity, "graph_invalid", "接触图结构无效", err)
 	}
-	result, err := analyzer.Propagate(graph, seeds, declared, s.maxDepth, s.thresholds)
+	result, err := analyzer.PropagateCtx(ctx, graph, seeds, declared, s.maxDepth, s.thresholds)
 	if err != nil {
 		return analyzer.Result{}, nil, NewError(http.StatusUnprocessableEntity, "propagation_failed", "风险传播计算失败", err)
 	}
@@ -202,5 +202,11 @@ func (s *AssessmentService) computeRoute(ctx context.Context, route model.Proces
 }
 
 func (s *AssessmentService) resetAfterFailure(ctx context.Context, id uint, calculationErr error, actor Principal, requestID string) {
-	_ = s.runs.ResetCalculation(ctx, id, calculationErr.Error(), AuditScope(actor, requestID))
+	// The request context may already be cancelled (client disconnected or
+	// deadline expired), but resetting the run back to "queued" is a cleanup
+	// write that must succeed regardless. Detach from the request so a
+	// cancelled request does not leave the run stuck in "calculating".
+	resetCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	_ = s.runs.ResetCalculation(resetCtx, id, calculationErr.Error(), AuditScope(actor, requestID))
 }

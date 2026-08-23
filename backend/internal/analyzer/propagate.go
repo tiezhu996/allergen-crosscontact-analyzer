@@ -1,6 +1,7 @@
 package analyzer
 
 import (
+	"context"
 	"fmt"
 	"sort"
 	"strings"
@@ -78,8 +79,23 @@ type pathState struct {
 }
 
 func Propagate(graph Graph, profiles map[uint]ProfileSeed, declared []string, maxDepth int, thresholds ThresholdSnapshot) (Result, error) {
+	return propagate(context.Background(), graph, profiles, declared, maxDepth, thresholds)
+}
+
+// PropagateCtx runs the cross-contact propagation and aborts early when ctx is
+// cancelled or its deadline expires. Callers that drive propagation from an HTTP
+// request should prefer this over Propagate so client cancellation propagates
+// into the (potentially long-running) graph traversal.
+func PropagateCtx(ctx context.Context, graph Graph, profiles map[uint]ProfileSeed, declared []string, maxDepth int, thresholds ThresholdSnapshot) (Result, error) {
+	return propagate(ctx, graph, profiles, declared, maxDepth, thresholds)
+}
+
+func propagate(ctx context.Context, graph Graph, profiles map[uint]ProfileSeed, declared []string, maxDepth int, thresholds ThresholdSnapshot) (Result, error) {
 	if maxDepth < 1 {
 		return Result{}, fmt.Errorf("max propagation depth must be positive")
+	}
+	if err := ctx.Err(); err != nil {
+		return Result{}, err
 	}
 	declaredSet := normalizedSet(declared)
 	result := Result{DeclaredAllergens: sortedKeys(declaredSet), Thresholds: thresholds, Cycles: DetectCycles(graph), MaxDepth: maxDepth}
@@ -89,13 +105,19 @@ func Propagate(graph Graph, profiles map[uint]ProfileSeed, declared []string, ma
 	}
 	sort.Slice(codes, func(i, j int) bool { return graph.Nodes[codes[i]].Order < graph.Nodes[codes[j]].Order })
 	for _, sourceCode := range codes {
+		if err := ctx.Err(); err != nil {
+			return Result{}, err
+		}
 		node := graph.Nodes[sourceCode]
 		profile, ok := profiles[node.ProfileID]
 		if !ok {
 			return Result{}, fmt.Errorf("step %q references unavailable allergen profile %d", sourceCode, node.ProfileID)
 		}
 		for _, allergen := range normalizeAllergens(profile.Allergens) {
-			walkSource(graph, sourceCode, allergen, profile, declaredSet, maxDepth, thresholds, &result)
+			walkSource(ctx, graph, sourceCode, allergen, profile, declaredSet, maxDepth, thresholds, &result)
+			if err := ctx.Err(); err != nil {
+				return Result{}, err
+			}
 		}
 	}
 	result.Matrix = buildMatrix(result.RiskItems, thresholds)
@@ -121,10 +143,13 @@ func Propagate(graph Graph, profiles map[uint]ProfileSeed, declared []string, ma
 	return result, nil
 }
 
-func walkSource(graph Graph, source, allergen string, profile ProfileSeed, declared map[string]struct{}, maxDepth int, thresholds ThresholdSnapshot, result *Result) {
+func walkSource(ctx context.Context, graph Graph, source, allergen string, profile ProfileSeed, declared map[string]struct{}, maxDepth int, thresholds ThresholdSnapshot, result *Result) {
 	initial := pathState{current: source, path: []string{source}, score: 1, visited: map[string]bool{source: true}}
 	stack := []pathState{initial}
 	for len(stack) > 0 {
+		if err := ctx.Err(); err != nil {
+			return
+		}
 		state := stack[len(stack)-1]
 		stack = stack[:len(stack)-1]
 		if len(state.edges) >= maxDepth {

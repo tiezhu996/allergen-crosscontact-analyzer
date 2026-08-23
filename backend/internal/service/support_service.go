@@ -26,6 +26,11 @@ type AppError struct {
 	Cause   error
 }
 
+// StatusClientClosedRequest mirrors the nginx 499 convention: the client gave
+// up (disconnected or cancelled) before the response was written. Mapping
+// context.Canceled to it keeps cancelled requests out of the 5xx bucket.
+const StatusClientClosedRequest = 499
+
 func (e *AppError) Error() string {
 	if e.Cause == nil {
 		return e.Message
@@ -47,6 +52,10 @@ func NormalizeError(err error) *AppError {
 		return app
 	}
 	switch {
+	case errors.Is(err, context.Canceled):
+		return NewError(StatusClientClosedRequest, "request_cancelled", "请求已被取消", err)
+	case errors.Is(err, context.DeadlineExceeded):
+		return NewError(http.StatusGatewayTimeout, "request_timeout", "请求处理超时", err)
 	case errors.Is(err, gorm.ErrRecordNotFound):
 		return NewError(http.StatusNotFound, "not_found", "请求的资源不存在", err)
 	case errors.Is(err, repository.ErrDuplicate), errors.Is(err, gorm.ErrDuplicatedKey):

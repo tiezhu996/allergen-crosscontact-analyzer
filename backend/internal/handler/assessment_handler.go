@@ -1,8 +1,6 @@
 package handler
 
 import (
-	"context"
-
 	"food-allergen-crosscontact-analyzer/backend/internal/dto"
 	"food-allergen-crosscontact-analyzer/backend/internal/service"
 	"food-allergen-crosscontact-analyzer/backend/internal/util"
@@ -24,7 +22,7 @@ func (h *AssessmentHandler) Preview(c *gin.Context) {
 	if !util.BindJSON(c, &request, h.validate) {
 		return
 	}
-	result, err := h.service.Preview(context.Background(), request.RouteID)
+	result, err := h.service.Preview(c.Request.Context(), request.RouteID)
 	if err != nil {
 		util.Error(c, err)
 		return
@@ -37,7 +35,7 @@ func (h *AssessmentHandler) List(c *gin.Context) {
 	if !util.BindQuery(c, &query, h.validate) {
 		return
 	}
-	items, total, err := h.service.List(context.Background(), query)
+	items, total, err := h.service.List(c.Request.Context(), query)
 	if err != nil {
 		util.Error(c, err)
 		return
@@ -47,7 +45,7 @@ func (h *AssessmentHandler) List(c *gin.Context) {
 }
 
 func (h *AssessmentHandler) Summary(c *gin.Context) {
-	result, err := h.service.Summary(context.Background())
+	result, err := h.service.Summary(c.Request.Context())
 	if err != nil {
 		util.Error(c, err)
 		return
@@ -59,7 +57,7 @@ func (h *AssessmentHandler) Get(c *gin.Context) {
 	if !ok {
 		return
 	}
-	item, err := h.service.Get(context.Background(), id)
+	item, err := h.service.Get(c.Request.Context(), id)
 	if err != nil {
 		util.Error(c, err)
 		return
@@ -76,7 +74,7 @@ func (h *AssessmentHandler) Create(c *gin.Context) {
 	if !util.BindJSON(c, &request, h.validate) {
 		return
 	}
-	item, err := h.service.Create(context.Background(), request, principal, RequestID(c))
+	item, err := h.service.Create(c.Request.Context(), request, principal, RequestID(c))
 	if err != nil {
 		util.Error(c, err)
 		return
@@ -93,7 +91,7 @@ func (h *AssessmentHandler) Run(c *gin.Context) {
 	if !ok {
 		return
 	}
-	item, err := h.service.Run(context.Background(), id, principal, RequestID(c))
+	item, err := h.service.Run(c.Request.Context(), id, principal, RequestID(c))
 	if err != nil {
 		util.Error(c, err)
 		return
@@ -114,7 +112,7 @@ func (h *AssessmentHandler) Review(c *gin.Context) {
 	if !util.BindJSON(c, &request, h.validate) {
 		return
 	}
-	item, err := h.service.Review(context.Background(), id, request, principal, RequestID(c))
+	item, err := h.service.Review(c.Request.Context(), id, request, principal, RequestID(c))
 	if err != nil {
 		util.Error(c, err)
 		return
