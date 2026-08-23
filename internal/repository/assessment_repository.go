@@ -80,11 +80,12 @@ func (r *assessmentRepository) Summary(ctx context.Context) (dto.AssessmentSumma
 	if err := r.db.WithContext(ctx).Model(&model.AssessmentRun{}).Select("assessment_status AS status, COUNT(*) AS count").Group("assessment_status").Scan(&rows).Error; err != nil {
 		return dto.AssessmentSummary{}, fmt.Errorf("summarize assessment runs: %w", err)
 	}
-	result := dto.AssessmentSummary{}
+	result := dto.AssessmentSummary{ByStatus: make(map[string]int64)}
 	for _, item := range rows {
 		result.ByStatus[item.Status] = item.Count
 		result.Total += item.Count
 	}
+	result.PendingReview = result.ByStatus[string(constants.AssessmentPendingReview)]
 	return result, nil
 }
 

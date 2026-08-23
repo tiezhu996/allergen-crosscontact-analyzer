@@ -108,16 +108,21 @@ func (r *profileRepository) Usage(ctx context.Context, profileID uint) ([]dto.Pr
 	if err := r.db.WithContext(ctx).Order("route_code").Find(&routes).Error; err != nil {
 		return nil, fmt.Errorf("list routes for profile usage: %w", err)
 	}
-	var result []dto.ProfileUsage
+	result := make([]dto.ProfileUsage, 0)
 	for _, route := range routes {
 		var steps []dto.RouteStep
 		if err := json.Unmarshal(route.OrderedStepsJSON, &steps); err != nil {
 			return nil, fmt.Errorf("decode steps for route %d: %w", route.ID, err)
 		}
+		used := false
 		for _, step := range steps {
 			if step.ProfileID == profileID {
-				result = append(result, dto.ProfileUsage{RouteID: route.ID, RouteCode: route.RouteCode, ProductName: route.ProductName, RouteVersion: route.Version})
+				used = true
+				break
 			}
+		}
+		if used {
+			result = append(result, dto.ProfileUsage{RouteID: route.ID, RouteCode: route.RouteCode, ProductName: route.ProductName, RouteVersion: route.Version})
 		}
 	}
 	return result, nil
@@ -125,7 +130,7 @@ func (r *profileRepository) Usage(ctx context.Context, profileID uint) ([]dto.Pr
 
 func (r *profileRepository) GetMany(ctx context.Context, ids []uint) ([]model.AllergenProfile, error) {
 	if len(ids) == 0 {
-		return nil, nil
+		return []model.AllergenProfile{}, nil
 	}
 	var profiles []model.AllergenProfile
 	if err := r.db.WithContext(ctx).Where("id IN ?", ids).Find(&profiles).Error; err != nil {
