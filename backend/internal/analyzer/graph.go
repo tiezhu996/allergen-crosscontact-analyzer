@@ -64,7 +64,7 @@ func BuildGraph(steps []dto.RouteStep, records []model.ContactEdge) (Graph, erro
 		if record.FromStepCode == record.ToStepCode {
 			return Graph{}, fmt.Errorf("contact edge %d cannot be a self-loop", record.ID)
 		}
-		key := fmt.Sprintf("%s\x00%s", record.FromStepCode, record.ToStepCode)
+		key := fmt.Sprintf("%s\x00%s\x00%d", record.FromStepCode, record.ToStepCode, record.ID)
 		if _, exists := seen[key]; exists {
 			continue
 		}
@@ -113,7 +113,8 @@ func DetectCycles(graph Graph) [][]string {
 						break
 					}
 				}
-				cycle := stack[start:]
+				cycle := make([]string, 0, len(stack)-start+1)
+				cycle = append(cycle, stack[start:]...)
 				cycle = append(cycle, edge.To)
 				cycles = append(cycles, cycle)
 			} else if !visited[edge.To] {

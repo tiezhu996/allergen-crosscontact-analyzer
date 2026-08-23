@@ -136,8 +136,15 @@ func walkSource(graph Graph, source, allergen string, profile ProfileSeed, decla
 		outgoing := graph.Outgoing[state.current]
 		for index := len(outgoing) - 1; index >= 0; index-- {
 			edge := outgoing[index]
+			if state.visited[edge.To] {
+				result.CycleEdgesSkipped++
+				continue
+			}
 			score := AccumulateScore(state.score, edge.Weight)
-			path := append(state.path, edge.To)
+			if score <= 0 {
+				continue
+			}
+			path := appendCopy(state.path, edge.To)
 			edges := appendEdge(state.edges, edge)
 			evidence := evidenceFor(edges)
 			critical := CriticalEdge(edges)

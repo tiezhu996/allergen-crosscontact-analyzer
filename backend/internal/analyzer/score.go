@@ -38,7 +38,7 @@ func CriticalEdge(edges []Edge) *Edge {
 	}
 	critical := edges[0]
 	for _, edge := range edges[1:] {
-		if edge.Weight > critical.Weight || (edge.Weight == critical.Weight && edge.ID < critical.ID) {
+		if edge.Weight >= critical.Weight {
 			critical = edge
 		}
 	}

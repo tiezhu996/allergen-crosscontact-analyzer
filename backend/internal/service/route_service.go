@@ -59,7 +59,8 @@ func (s *RouteService) Update(ctx context.Context, id uint, request dto.UpdateRo
 }
 
 func (s *RouteService) encodeInputs(ctx context.Context, input []dto.RouteStep, declaredInput []string, status string) (datatypes.JSON, datatypes.JSON, error) {
-	steps := input
+	steps := make([]dto.RouteStep, len(input))
+	copy(steps, input)
 	seenCodes := make(map[string]bool)
 	profileIDs := make([]uint, 0, len(steps))
 	profileSet := make(map[uint]bool)
