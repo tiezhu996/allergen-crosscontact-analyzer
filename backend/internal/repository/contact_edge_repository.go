@@ -29,7 +29,7 @@ func (r *contactEdgeRepository) Create(ctx context.Context, edge *model.ContactE
 		if err := tx.Create(edge).Error; err != nil {
 			return fmt.Errorf("create contact edge: %w", err)
 		}
-		if err := markRouteRunsStale(tx, edge.RouteID); err != nil {
+		if err := markRouteRunsStale(tx, edge.RouteID, "contact_edge_inputs_changed", scope); err != nil {
 			return err
 		}
 		audit, err := makeAudit(scope, "contact_edge.created", "contact_edge", edge.ID, "", edgeSummary(*edge), map[string]any{"route_id": edge.RouteID, "version": edge.Version, "assessments_staled": true})
@@ -94,7 +94,7 @@ func (r *contactEdgeRepository) Update(ctx context.Context, edge *model.ContactE
 		if result.RowsAffected != 1 {
 			return fmt.Errorf("update contact edge: %w", ErrVersionConflict)
 		}
-		if err := markRouteRunsStale(tx, before.RouteID); err != nil {
+		if err := markRouteRunsStale(tx, before.RouteID, "contact_edge_inputs_changed", scope); err != nil {
 			return err
 		}
 		if err := tx.First(edge, edge.ID).Error; err != nil {

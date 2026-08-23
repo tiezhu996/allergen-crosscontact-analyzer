@@ -86,7 +86,7 @@ func (r *profileRepository) Update(ctx context.Context, profile *model.AllergenP
 		if result.RowsAffected != 1 {
 			return fmt.Errorf("update allergen profile: %w", ErrVersionConflict)
 		}
-		if err := markAllRunsStale(tx); err != nil {
+		if err := markAllRunsStale(tx, "profile_inputs_changed", scope); err != nil {
 			return err
 		}
 		if err := tx.First(profile, profile.ID).Error; err != nil {

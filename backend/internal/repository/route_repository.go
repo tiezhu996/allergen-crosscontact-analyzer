@@ -75,15 +75,15 @@ func (r *routeRepository) Update(ctx context.Context, route *model.ProcessRoute,
 		if err := tx.First(&before, route.ID).Error; err != nil {
 			return fmt.Errorf("load route before update: %w", err)
 		}
-		updates := map[string]any{"product_name": route.ProductName, "ordered_steps_json": route.OrderedStepsJSON, "declared_allergens_json": route.DeclaredAllergensJSON, "route_status": route.RouteStatus}
-		result := tx.Model(&model.ProcessRoute{}).Where("id = ?", route.ID).Updates(updates)
+		updates := map[string]any{"product_name": route.ProductName, "ordered_steps_json": route.OrderedStepsJSON, "declared_allergens_json": route.DeclaredAllergensJSON, "route_status": route.RouteStatus, "version": gorm.Expr("version + 1")}
+		result := tx.Model(&model.ProcessRoute{}).Where("id = ? AND version = ?", route.ID, expected).Updates(updates)
 		if result.Error != nil {
 			return fmt.Errorf("update process route: %w", result.Error)
 		}
 		if result.RowsAffected != 1 {
 			return fmt.Errorf("update process route: %w", ErrVersionConflict)
 		}
-		if err := markRouteRunsStale(tx, route.ID); err != nil {
+		if err := markRouteRunsStale(tx, route.ID, "route_inputs_changed", scope); err != nil {
 			return err
 		}
 		if err := tx.First(route, route.ID).Error; err != nil {

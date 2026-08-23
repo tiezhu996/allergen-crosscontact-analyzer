@@ -26,7 +26,7 @@ func CanTransition(from, to AssessmentStatus) bool {
 	case AssessmentQueued:
 		return to == AssessmentCalculating
 	case AssessmentCalculating:
-		return to == AssessmentPendingReview || to == AssessmentQueued
+		return to == AssessmentPendingReview || to == AssessmentQueued || to == AssessmentStale
 	case AssessmentPendingReview:
 		return to == AssessmentAccepted || to == AssessmentRejected || to == AssessmentStale
 	case AssessmentAccepted, AssessmentRejected:

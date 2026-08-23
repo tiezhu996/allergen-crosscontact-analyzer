@@ -215,18 +215,66 @@ func makeAudit(scope AuditContext, action, entityType string, entityID uint, bef
 	return model.AuditEvent{RequestID: scope.RequestID, ActorID: scope.ActorID, ActorName: scope.ActorName, Action: action, EntityType: entityType, EntityID: entityID, BeforeSummary: before, AfterSummary: after, MetadataJSON: encoded, CreatedAt: time.Now().UTC()}, nil
 }
 
-func markRouteRunsStale(tx *gorm.DB, routeID uint) error {
-	statuses := []constants.AssessmentStatus{constants.AssessmentPendingReview, constants.AssessmentAccepted, constants.AssessmentRejected}
-	if err := tx.Model(&model.AssessmentRun{}).Where("route_id = ? AND assessment_status IN ?", routeID, statuses).Update("assessment_status", constants.AssessmentStale).Error; err != nil {
+func markRouteRunsStale(tx *gorm.DB, routeID uint, reason string, scope AuditContext) error {
+	statuses := []constants.AssessmentStatus{constants.AssessmentCalculating, constants.AssessmentPendingReview, constants.AssessmentAccepted, constants.AssessmentRejected}
+	var runs []model.AssessmentRun
+	if err := tx.Select("id, assessment_status").Where("route_id = ? AND assessment_status IN ?", routeID, statuses).Find(&runs).Error; err != nil {
+		return fmt.Errorf("load route assessments to stale: %w", err)
+	}
+	if len(runs) == 0 {
+		return nil
+	}
+	ids := make([]uint, 0, len(runs))
+	for _, run := range runs {
+		ids = append(ids, run.ID)
+	}
+	if err := tx.Model(&model.AssessmentRun{}).Where("id IN ?", ids).Update("assessment_status", constants.AssessmentStale).Error; err != nil {
 		return fmt.Errorf("mark route assessments stale: %w", err)
+	}
+	if err := auditRunsVoided(tx, runs, reason, map[string]any{"route_id": routeID}, scope); err != nil {
+		return err
 	}
 	return nil
 }
 
-func markAllRunsStale(tx *gorm.DB) error {
-	statuses := []constants.AssessmentStatus{constants.AssessmentPendingReview, constants.AssessmentAccepted, constants.AssessmentRejected}
-	if err := tx.Model(&model.AssessmentRun{}).Where("assessment_status IN ?", statuses).Update("assessment_status", constants.AssessmentStale).Error; err != nil {
+func markAllRunsStale(tx *gorm.DB, reason string, scope AuditContext) error {
+	statuses := []constants.AssessmentStatus{constants.AssessmentCalculating, constants.AssessmentPendingReview, constants.AssessmentAccepted, constants.AssessmentRejected}
+	var runs []model.AssessmentRun
+	if err := tx.Select("id, assessment_status").Where("assessment_status IN ?", statuses).Find(&runs).Error; err != nil {
+		return fmt.Errorf("load assessments to stale: %w", err)
+	}
+	if len(runs) == 0 {
+		return nil
+	}
+	ids := make([]uint, 0, len(runs))
+	for _, run := range runs {
+		ids = append(ids, run.ID)
+	}
+	if err := tx.Model(&model.AssessmentRun{}).Where("id IN ?", ids).Update("assessment_status", constants.AssessmentStale).Error; err != nil {
 		return fmt.Errorf("mark assessments stale: %w", err)
+	}
+	if err := auditRunsVoided(tx, runs, reason, nil, scope); err != nil {
+		return err
+	}
+	return nil
+}
+
+// auditRunsVoided writes an assessment.voided audit event for each run that was
+// transitioned to stale, recording the previous status so the voiding is
+// traceable in the audit log together with the triggering input change.
+func auditRunsVoided(tx *gorm.DB, runs []model.AssessmentRun, reason string, extra map[string]any, scope AuditContext) error {
+	for _, run := range runs {
+		metadata := map[string]any{"reason": reason}
+		for k, v := range extra {
+			metadata[k] = v
+		}
+		audit, err := makeAudit(scope, "assessment.voided", "assessment_run", run.ID, string(run.AssessmentStatus), string(constants.AssessmentStale), metadata)
+		if err != nil {
+			return err
+		}
+		if err := tx.Create(&audit).Error; err != nil {
+			return fmt.Errorf("audit assessment void: %w", err)
+		}
 	}
 	return nil
 }
