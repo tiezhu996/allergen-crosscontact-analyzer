@@ -44,7 +44,7 @@ func (s *ContactEdgeService) Create(ctx context.Context, request dto.CreateConta
 func (s *ContactEdgeService) Get(ctx context.Context, id uint) (model.ContactEdge, error) {
 	edge, err := s.edges.Get(ctx, id)
 	if err != nil {
-		return model.ContactEdge{}, fmt.Errorf("get contact edge: %v", err)
+		return model.ContactEdge{}, fmt.Errorf("get contact edge: %w", err)
 	}
 	return edge, nil
 }
@@ -55,7 +55,7 @@ func (s *ContactEdgeService) List(ctx context.Context, query dto.ContactEdgeQuer
 func (s *ContactEdgeService) Update(ctx context.Context, id uint, request dto.UpdateContactEdgeRequest, actor Principal, requestID string) (model.ContactEdge, error) {
 	current, err := s.edges.Get(ctx, id)
 	if err != nil {
-		return model.ContactEdge{}, fmt.Errorf("load contact edge: %v", err)
+		return model.ContactEdge{}, fmt.Errorf("load contact edge: %w", err)
 	}
 	edge := model.ContactEdge{ID: id, RouteID: current.RouteID, FromStepCode: current.FromStepCode, ToStepCode: current.ToStepCode, ContactType: request.ContactType, SharedEquipment: strings.TrimSpace(request.SharedEquipment), CleaningFactor: request.CleaningFactor, CarryoverProbability: request.CarryoverProbability, EvidenceNote: strings.TrimSpace(request.EvidenceNote), Enabled: request.Enabled}
 	if err := s.edges.Update(ctx, &edge, request.ExpectedVersion, AuditScope(actor, requestID)); err != nil {

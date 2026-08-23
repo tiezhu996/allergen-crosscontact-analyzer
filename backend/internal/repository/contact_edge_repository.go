@@ -46,7 +46,7 @@ func (r *contactEdgeRepository) Create(ctx context.Context, edge *model.ContactE
 func (r *contactEdgeRepository) Get(ctx context.Context, id uint) (model.ContactEdge, error) {
 	var edge model.ContactEdge
 	if err := r.db.WithContext(ctx).First(&edge, id).Error; err != nil {
-		return model.ContactEdge{}, fmt.Errorf("get contact edge: %v", err)
+		return model.ContactEdge{}, fmt.Errorf("get contact edge: %w", err)
 	}
 	return edge, nil
 }

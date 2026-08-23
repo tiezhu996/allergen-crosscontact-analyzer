@@ -1,8 +1,6 @@
 package handler
 
 import (
-	"fmt"
-
 	"food-allergen-crosscontact-analyzer/backend/internal/dto"
 	"food-allergen-crosscontact-analyzer/backend/internal/service"
 	"food-allergen-crosscontact-analyzer/backend/internal/util"
@@ -40,7 +38,7 @@ func (h *ContactEdgeHandler) Get(c *gin.Context) {
 	}
 	item, err := h.service.Get(c.Request.Context(), id)
 	if err != nil {
-		util.Error(c, fmt.Errorf("get contact edge: %v", err))
+		util.Error(c, err)
 		return
 	}
 	util.OK(c, item)
