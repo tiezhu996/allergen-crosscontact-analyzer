@@ -68,40 +68,44 @@ func (s *AssessmentService) Run(ctx context.Context, id uint, actor Principal, r
 	if err := s.runs.BeginCalculation(ctx, id, AuditScope(actor, requestID)); err != nil {
 		return model.AssessmentRun{}, err
 	}
-	run, err := s.runs.Get(ctx, id)
-	if err != nil {
+	// From here the run is in the calculating state. Any failure before
+	// CompleteCalculation succeeds must roll the run back to queued so it can be
+	// retried instead of being stranded in calculating forever. rollback is the
+	// single chokepoint: it resets state and returns the original caller-facing
+	// error so the audit trail records the cause without masking it.
+	rollback := func(err error) (model.AssessmentRun, error) {
 		s.resetAfterFailure(ctx, id, err, actor, requestID)
 		return model.AssessmentRun{}, err
+	}
+	run, err := s.runs.Get(ctx, id)
+	if err != nil {
+		return rollback(err)
 	}
 	var queued queuedAssessmentSnapshot
 	if err := json.Unmarshal(run.InputSnapshotJSON, &queued); err != nil || queued.RouteID != run.RouteID || queued.RouteVersionAtQueue == 0 {
-		validationErr := NewError(http.StatusUnprocessableEntity, "assessment_snapshot_invalid", "评估排队快照无效，请重新提交评估", err)
-		return model.AssessmentRun{}, validationErr
+		return rollback(NewError(http.StatusUnprocessableEntity, "assessment_snapshot_invalid", "评估排队快照无效，请重新提交评估", err))
 	}
 	route, err := s.routes.Get(ctx, run.RouteID)
 	if err != nil {
-		return model.AssessmentRun{}, err
+		return rollback(err)
 	}
 	if route.Version != queued.RouteVersionAtQueue {
-		conflictErr := NewError(http.StatusConflict, "route_version_conflict", "路线在评估排队后已变化，请重新提交评估", nil)
-		return model.AssessmentRun{}, conflictErr
+		return rollback(NewError(http.StatusConflict, "route_version_conflict", "路线在评估排队后已变化，请重新提交评估", nil))
 	}
 	result, snapshot, err := s.computeRoute(ctx, route)
 	if err != nil {
-		return model.AssessmentRun{}, err
+		return rollback(err)
 	}
 	matrixJSON, err := json.Marshal(result.Matrix)
 	if err != nil {
-		s.resetAfterFailure(ctx, id, err, actor, requestID)
-		return model.AssessmentRun{}, fmt.Errorf("encode assessment matrix: %w", err)
+		return rollback(fmt.Errorf("encode assessment matrix: %w", err))
 	}
 	riskJSON, err := json.Marshal(result.RiskItems)
 	if err != nil {
-		s.resetAfterFailure(ctx, id, err, actor, requestID)
-		return model.AssessmentRun{}, fmt.Errorf("encode assessment risk items: %w", err)
+		return rollback(fmt.Errorf("encode assessment risk items: %w", err))
 	}
 	if err := s.runs.CompleteCalculation(ctx, id, snapshot, datatypes.JSON(matrixJSON), datatypes.JSON(riskJSON), result.HighestRiskLevel, s.algorithm, AuditScope(actor, requestID)); err != nil {
-		return model.AssessmentRun{}, err
+		return rollback(err)
 	}
 	return s.runs.Get(ctx, id)
 }
